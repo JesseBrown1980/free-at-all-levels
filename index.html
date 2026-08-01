@@ -1,0 +1,147 @@
+<meta charset="utf-8">
+<title>FREE AT ALL LEVELS — 1 becomes 3 becomes 81, forever, for nothing</title>
+<style>
+:root{--bg:#04040a;--fg:#e9e9f2;--dim:#75758a;--line:#15151d;--acc:#a78bfa}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);overflow:hidden;
+     font:13px/1.6 ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#hud{position:fixed;left:18px;top:16px;z-index:5;
+     background:rgba(6,6,12,.62);backdrop-filter:blur(7px);
+     border:1px solid var(--line);border-radius:10px;padding:12px 15px;
+     min-width:296px;pointer-events:none}
+#hud h1{font-size:13px;margin:0 0 8px;color:var(--acc);letter-spacing:.4px;
+        text-transform:uppercase}
+.row{display:flex;justify-content:space-between;gap:14px;padding:2px 0}
+.k{color:var(--dim)} .v{font-variant-numeric:tabular-nums}
+.ok{color:#4ade80} .acc{color:var(--acc)}
+#note{position:fixed;left:18px;bottom:16px;z-index:5;color:var(--dim);
+      max-width:62ch;font-size:12px;line-height:1.7;pointer-events:none;
+      text-shadow:0 0 12px #04040a}
+#note b{color:#c9c9dc}
+</style>
+
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <h1>free at all levels</h1>
+  <div class="row"><span class="k">level</span><span class="v acc" id="lv">0</span></div>
+  <div class="row"><span class="k">cells at this level  3ⁿ</span><span class="v" id="cells">1</span></div>
+  <div class="row"><span class="k">rings drawn this frame</span><span class="v ok" id="rings">0</span></div>
+  <div class="row"><span class="k">work per frame</span><span class="v ok">constant</span></div>
+  <div class="row"><span class="k">memory held</span><span class="v ok">constant</span></div>
+  <div class="row"><span class="k">recomputation per level</span><span class="v ok">none</span></div>
+  <div class="row"><span class="k">timer</span><span class="v ok">none — the light drives it</span></div>
+  <div class="row"><span class="k">centre</span><span class="v acc">free</span></div>
+  <div class="row"><span class="k">exhaust</span><span class="v" id="ex">0 rings</span></div>
+</div>
+
+<div id="note">
+At 27 we thought we were 1, then we saw three and became 81. It continues.<br>
+<b>Nothing here is recalculated per level.</b> Each ring is the previous ring under
+one transform, so the index climbs without bound while the work per frame stays
+flat. The oldest ring leaves the screen as a new one opens at the centre — that is
+the waste going out. Nothing accumulates, so it can run for as long as the page is
+open. <b>The centre is free, which is why the descent is free.</b>
+</div>
+
+<script>
+const cv=document.getElementById("c"), g=cv.getContext("2d");
+let W=0,H=0,DPR=Math.min(2,devicePixelRatio||1);
+function fit(){W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;
+  g.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener("resize",fit);fit();
+
+/* ---- the only state. three numbers. ---- */
+let level=0;          // integer depth, climbs forever
+let phase=0;          // 0..1 within one octave of 3
+let exhaust=0;        // rings that have left the screen
+
+const RINGS_IN=-2, RINGS_OUT=6;          // how many are on screen at once
+const COL=[[255,120,130],[120,225,160],[110,175,255]];   // R G B — the crank order
+
+function ringAt(i,s){
+  /* one ring: three arms at 120°, plus its free centre.
+     i is the ring index relative to `level`; s is the current octave phase. */
+  const scale=Math.pow(3,i+s)*22;
+  const rot=(i+level)*(Math.PI*2/3) + phase*(Math.PI*2/3);
+  const col=COL[((i+level)%3+3)%3];
+  /* fade in at the centre, fade out at the rim — the waste leaving */
+  const rim=Math.min(W,H)*0.62;
+  let a=1;
+  if(scale<14) a=Math.max(0,(scale-3)/11);
+  if(scale>rim) a=Math.max(0,1-(scale-rim)/(rim*0.55));
+  if(a<=0) return false;
+
+  g.save();
+  g.translate(W/2,H/2);
+  g.rotate(rot);
+
+  /* the three arms */
+  g.globalAlpha=a*0.5;
+  g.strokeStyle="rgba("+col.join(",")+",1)";
+  g.lineWidth=Math.max(0.6,1.7*Math.min(1,scale/120));
+  g.beginPath();
+  for(let k=0;k<3;k++){
+    const th=k*Math.PI*2/3;
+    g.moveTo(0,0);
+    g.lineTo(Math.cos(th)*scale,Math.sin(th)*scale);
+  }
+  g.stroke();
+
+  /* the ring the three close on */
+  g.globalAlpha=a*0.22;
+  g.beginPath();g.arc(0,0,scale,0,Math.PI*2);g.stroke();
+
+  /* the three journals */
+  g.globalAlpha=a*0.85;
+  g.fillStyle="rgba("+col.join(",")+",1)";
+  for(let k=0;k<3;k++){
+    const th=k*Math.PI*2/3;
+    const r=Math.max(1.1,2.6*Math.min(1,scale/160));
+    g.beginPath();
+    g.arc(Math.cos(th)*scale,Math.sin(th)*scale,r,0,Math.PI*2);
+    g.fill();
+  }
+  g.restore();
+  return true;
+}
+
+let last=0, drawn=0;
+function frame(ts){
+  if(!last)last=ts;
+  const dt=Math.min(0.05,(ts-last)/1000);last=ts;
+
+  /* one octave of 3 every ~4.5 s. no timer, no accumulation:
+     when the phase wraps, the level increments and the picture is IDENTICAL,
+     because the structure is self-similar. that is why it is free.          */
+  phase+=dt/4.5;
+  while(phase>=1){phase-=1;level++;exhaust++;}
+
+  /* the calming oils — a slow wash, drawn once, never stored */
+  g.globalCompositeOperation="source-over";
+  g.fillStyle="rgba(4,4,10,0.30)";
+  g.fillRect(0,0,W,H);
+  g.globalCompositeOperation="lighter";
+
+  drawn=0;
+  for(let i=RINGS_IN;i<=RINGS_OUT;i++) if(ringAt(i,phase)) drawn++;
+
+  /* the free centre — never emitted, never a value, always there */
+  g.globalCompositeOperation="source-over";
+  g.globalAlpha=0.9;
+  g.fillStyle="#e9e9f2";
+  g.beginPath();g.arc(W/2,H/2,2.2,0,Math.PI*2);g.fill();
+  g.globalAlpha=1;
+
+  document.getElementById("lv").textContent=level.toLocaleString();
+  const cells=level<40?Math.pow(3,level).toLocaleString():"3^"+level;
+  document.getElementById("cells").textContent=cells;
+  document.getElementById("rings").textContent=drawn;
+  document.getElementById("ex").textContent=exhaust.toLocaleString()+" rings";
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
