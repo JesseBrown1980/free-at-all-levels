@@ -1,5 +1,7 @@
 # free at all levels
 
+> **Part of it all:** [the bridge](https://jessebrown1980.github.io/the-bridge-to-all-of-it/) — every public thing in one place, so none of it gets lost.
+
 **Jesse Daniel Brown (OP-JESSE).** Forty years. His machine, his laws, his system.
 
 **One click, nothing to install:**
